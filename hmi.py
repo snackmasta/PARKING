@@ -6,6 +6,7 @@
 import tkinter as tk
 import threading
 import time
+import math
 
 class ParkingSlot:
     def __init__(self, slot_id):
@@ -55,12 +56,22 @@ class ParkingSystem:
         self.status_msg = f"Car retrieved from slot {slot_num+1}."
 
     def rotate_to_slot(self, target_slot):
-        while self.ground_slot != target_slot:
+        n = self.num_slots
+        # Calculate shortest direction
+        cw_steps = (target_slot - self.ground_slot) % n
+        ccw_steps = (self.ground_slot - target_slot) % n
+        if cw_steps <= ccw_steps:
+            step = 1
+            steps = cw_steps
+        else:
+            step = -1
+            steps = ccw_steps
+        for _ in range(steps):
             if self.emergency or self.fault:
                 self.status_msg = "Rotation stopped: Emergency or Fault!"
                 return
-            self.ground_slot = (self.ground_slot + 1) % self.num_slots
-            time.sleep(0.3)
+            self.ground_slot = (self.ground_slot + step) % n
+            time.sleep(0.15)
 
     def emergency_stop(self):
         self.emergency = True
@@ -102,15 +113,23 @@ class ParkingHMI:
         tk.Label(frame_status, textvariable=self.vars['emergency'], font=("Arial", 11)).grid(row=1, column=1, sticky='w')
         tk.Label(frame_status, text="Fault:", font=("Arial", 11)).grid(row=2, column=0, sticky='e')
         tk.Label(frame_status, textvariable=self.vars['fault'], font=("Arial", 11)).grid(row=2, column=1, sticky='w')
+
+        # --- Animation Viewfinder ---
+        frame_anim = tk.LabelFrame(self.root, text="Site Animation", padx=10, pady=10, font=("Arial", 11, "bold"))
+        frame_anim.grid(row=1, column=0, padx=10, pady=5, sticky='ew')
+        self.canvas = tk.Canvas(frame_anim, width=220, height=320, bg='white')
+        self.canvas.grid(row=0, column=0)
+        self._draw_site()
+
         frame_slots = tk.LabelFrame(self.root, text="Parking Slots", padx=10, pady=5, font=("Arial", 11, "bold"))
-        frame_slots.grid(row=1, column=0, padx=10, pady=5, sticky='ew')
+        frame_slots.grid(row=2, column=0, padx=10, pady=5, sticky='ew')
         for i in range(self.system.num_slots):
             tk.Label(frame_slots, text=f"Slot {i+1}", font=("Arial", 11)).grid(row=i, column=0, sticky='e')
             tk.Label(frame_slots, textvariable=self.vars['slots'][i], font=("Arial", 11)).grid(row=i, column=1, sticky='w')
         tk.Label(frame_slots, text="At Ground:", font=("Arial", 11, "bold")).grid(row=self.system.num_slots, column=0, sticky='e')
         tk.Label(frame_slots, textvariable=self.vars['ground_slot'], font=("Arial", 11, "bold"), fg='green').grid(row=self.system.num_slots, column=1, sticky='w')
         frame_ctrl = tk.LabelFrame(self.root, text="Controls", padx=10, pady=5, font=("Arial", 11, "bold"))
-        frame_ctrl.grid(row=2, column=0, padx=10, pady=10, sticky='ew')
+        frame_ctrl.grid(row=3, column=0, padx=10, pady=10, sticky='ew')
         tk.Button(frame_ctrl, text="Park Car", width=12, command=self.park_car).grid(row=0, column=0, padx=5)
         tk.Button(frame_ctrl, text="Retrieve Car", width=12, command=self.retrieve_car).grid(row=0, column=1, padx=5)
         tk.Button(frame_ctrl, text="Emergency Stop", width=14, command=self.emergency_stop, bg='red', fg='white').grid(row=0, column=2, padx=5)
@@ -119,9 +138,32 @@ class ParkingHMI:
         tk.Button(frame_ctrl, text="Reset Fault", width=12, command=self.reset_fault).grid(row=1, column=1, padx=5)
         tk.Button(frame_ctrl, text="Quit", width=10, command=self.root.quit).grid(row=1, column=2, padx=5)
 
+    def _draw_site(self):
+        self.canvas.delete('all')
+        cx, cy = 110, 160
+        r = 100
+        slot_r = 30
+        n = self.system.num_slots
+        angle_step = 360 / n
+        # The slot at ground is always drawn at the bottom
+        for i in range(n):
+            rel_idx = (i - self.system.ground_slot) % n
+            angle = (90 + angle_step * rel_idx) * math.pi / 180
+            x = cx + r * math.cos(angle)
+            y = cy + r * math.sin(angle)
+            fill = 'gray' if self.system.slots[i].occupied else 'white'
+            outline = 'green' if i == self.system.ground_slot else 'black'
+            self.canvas.create_rectangle(x-slot_r, y-slot_r, x+slot_r, y+slot_r, fill=fill, outline=outline, width=3)
+            self.canvas.create_text(x, y, text=str(i+1), font=("Arial", 16, "bold"))
+        # Draw rotary frame
+        self.canvas.create_oval(cx-r, cy-r, cx+r, cy+r, outline='blue', width=4)
+        self.canvas.create_rectangle(cx-40, cy+100, cx+40, cy+120, fill='tan', outline='brown', width=3)
+        self.canvas.create_text(cx, cy+110, text='Ground', font=("Arial", 12, "bold"))
+
     def _run_loop(self):
         while self._running:
             self.update()
+            self._draw_site()
             time.sleep(0.5)
 
     def update(self):
