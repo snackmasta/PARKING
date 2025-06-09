@@ -71,6 +71,10 @@ class ParkingHMI:
         # Save current selection
         current_selection = self.retrieve_var.get()
         occ_slots = [i+1 for i, s in enumerate(self.system.slots) if s.occupied]
+        # Only update menu if the set of occupied slots has changed
+        if hasattr(self, '_last_occ_slots') and self._last_occ_slots == occ_slots:
+            return
+        self._last_occ_slots = occ_slots.copy()
         menu = self.retrieve_dropdown['menu']
         menu.delete(0, 'end')
         if occ_slots:
