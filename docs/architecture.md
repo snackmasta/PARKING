@@ -28,9 +28,74 @@ flowchart TD
 - On retrieval request, rotate to requested slot, unload car
 - Emergency stop disables all outputs
 
+# Control Logic Flowchart
+
+```mermaid
+flowchart TD
+    Start([Start])
+    CarDetected{Car Detected at Ground?}
+    Emergency{Emergency Stop?}
+    FindEmpty{Find Empty Slot}
+    RotateToEmpty{Rotate to Empty Slot}
+    LoadCar{Load Car}
+    Parked([Car Parked])
+    RetrieveReq{Retrieval Request?}
+    FindSlot{Find Requested Slot}
+    RotateToSlot{Rotate to Requested Slot}
+    UnloadCar{Unload Car}
+    Retrieved([Car Retrieved])
+    Shutdown([Shutdown All Outputs])
+    Wait([Wait/Idle])
+
+    Start --> Emergency
+    Emergency -- Yes --> Shutdown
+    Emergency -- No --> CarDetected
+    CarDetected -- Yes --> FindEmpty
+    CarDetected -- No --> RetrieveReq
+    FindEmpty --> RotateToEmpty
+    RotateToEmpty --> LoadCar
+    LoadCar --> Parked
+    Parked --> Wait
+    RetrieveReq -- Yes --> FindSlot
+    RetrieveReq -- No --> Wait
+    FindSlot --> RotateToSlot
+    RotateToSlot --> UnloadCar
+    UnloadCar --> Retrieved
+    Retrieved --> Wait
+    Wait --> Emergency
+```
+
 # Hardware Spec
 - 5 slot sensors
 - 1 position sensor per slot
 - 1 car detection sensor
 - 1 emergency stop
 - 1 rotary motor
+
+# System Architecture
+
+```mermaid
+flowchart LR
+    subgraph User Interface
+        UI[HMI / Push Buttons]
+    end
+    subgraph PLC System
+        PLC[PLC Controller]
+    end
+    subgraph Sensors
+        SSlot[Slot Sensors]
+        SPos[Position Sensors]
+        SCar[Car Detection Sensor]
+        SEStop[Emergency Stop]
+    end
+    subgraph Actuators
+        Motor[Rotary Motor]
+    end
+
+    UI -- requests/commands --> PLC
+    SSlot -- slot status --> PLC
+    SPos -- position status --> PLC
+    SCar -- car present --> PLC
+    SEStop -- emergency --> PLC
+    PLC -- control --> Motor
+```
