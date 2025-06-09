@@ -47,12 +47,10 @@ class ParkingHMI:
         tk.Label(frame_status, text="Emergency:", font=("Arial", 11)).grid(row=1, column=0, sticky='e')
         tk.Label(frame_status, textvariable=self.vars['emergency'], font=("Arial", 11)).grid(row=1, column=1, sticky='w')
         tk.Label(frame_status, text="Fault:", font=("Arial", 11)).grid(row=2, column=0, sticky='e')
-        tk.Label(frame_status, textvariable=self.vars['fault'], font=("Arial", 11)).grid(row=2, column=1, sticky='w')
-
-        # --- Animation Viewfinder ---
+        tk.Label(frame_status, textvariable=self.vars['fault'], font=("Arial", 11)).grid(row=2, column=1, sticky='w')        # --- Animation Viewfinder ---
         frame_anim = tk.LabelFrame(left_frame, text="Site Animation", padx=10, pady=10, font=("Arial", 11, "bold"))
         frame_anim.grid(row=1, column=0, padx=10, pady=5, sticky='ew')
-        self.canvas = tk.Canvas(frame_anim, width=220, height=320, bg='white')
+        self.canvas = tk.Canvas(frame_anim, width=240, height=340, bg='#f8f9fa', relief='sunken', bd=2)
         self.canvas.grid(row=0, column=0)
         self._draw_site()
 
@@ -221,26 +219,75 @@ class ParkingHMI:
             self._animating = True
         else:
             self._animating = False
+        
         self.canvas.delete('all')
-        cx, cy = 110, 160
-        r = 100
-        slot_r = 30
+        cx, cy = 110, 180  # Moved center down slightly for better balance
+        r = 85  # Slightly smaller radius for better proportions
+        slot_r = 25  # Smaller slot rectangles
         n = self.system.num_slots
         angle_step = 360 / n
         ground_pos = anim_ground_slot if anim_ground_slot is not None else self.system.ground_slot
         self._current_anim_ground_slot = float(ground_pos)
+        
+        # Draw background circle (track)
+        self.canvas.create_oval(cx-r-5, cy-r-5, cx+r+5, cy+r+5, outline='#2c3e50', width=3, fill='#ecf0f1')
+        
+        # Draw slots
         for i in range(n):
             rel_idx = (i - ground_pos) % n
             angle = (90 + angle_step * rel_idx) * math.pi / 180
             x = cx + r * math.cos(angle)
             y = cy + r * math.sin(angle)
-            fill = 'gray' if self.system.slots[i].occupied else 'white'
-            outline = 'green' if int(round(ground_pos)) % n == i else 'black'
-            self.canvas.create_rectangle(x-slot_r, y-slot_r, x+slot_r, y+slot_r, fill=fill, outline=outline, width=3)
-            self.canvas.create_text(x, y, text=str(i+1), font=("Arial", 16, "bold"))
-        self.canvas.create_oval(cx-r, cy-r, cx+r, cy+r, outline='blue', width=4)
-        self.canvas.create_rectangle(cx-40, cy+100, cx+40, cy+120, fill='tan', outline='brown', width=3)
-        self.canvas.create_text(cx, cy+110, text='Ground', font=("Arial", 12, "bold"))
+            
+            # Determine slot appearance
+            is_ground = int(round(ground_pos)) % n == i
+            is_occupied = self.system.slots[i].occupied
+            
+            if is_occupied:
+                fill_color = '#e74c3c'  # Red for occupied
+                outline_color = '#c0392b'
+                text_color = 'white'
+            else:
+                fill_color = '#2ecc71' if is_ground else '#95a5a6'  # Green for ground empty, gray for other empty
+                outline_color = '#27ae60' if is_ground else '#7f8c8d'
+                text_color = 'white'
+            
+            # Draw slot with rounded appearance
+            self.canvas.create_oval(x-slot_r, y-slot_r, x+slot_r, y+slot_r, 
+                                  fill=fill_color, outline=outline_color, width=3)
+            
+            # Add slot number
+            self.canvas.create_text(x, y-8, text=str(i+1), font=("Arial", 12, "bold"), fill=text_color)
+            
+            # Add status indicator
+            status_text = "CAR" if is_occupied else "---"
+            self.canvas.create_text(x, y+8, text=status_text, font=("Arial", 8, "bold"), fill=text_color)
+        
+        # Draw center hub
+        hub_r = 35
+        self.canvas.create_oval(cx-hub_r, cy-hub_r, cx+hub_r, cy+hub_r, 
+                              fill='#34495e', outline='#2c3e50', width=4)
+        self.canvas.create_text(cx, cy-8, text='ROTARY', font=("Arial", 10, "bold"), fill='white')
+        self.canvas.create_text(cx, cy+8, text='SYSTEM', font=("Arial", 10, "bold"), fill='white')
+        
+        # Draw ground platform with better styling
+        platform_width = 60
+        platform_height = 20
+        platform_y = cy + r + 25
+        
+        # Platform shadow
+        self.canvas.create_rectangle(cx-platform_width//2+2, platform_y+2, 
+                                   cx+platform_width//2+2, platform_y+platform_height+2, 
+                                   fill='#bdc3c7', outline='')
+        
+        # Main platform
+        self.canvas.create_rectangle(cx-platform_width//2, platform_y, 
+                                   cx+platform_width//2, platform_y+platform_height, 
+                                   fill='#f39c12', outline='#e67e22', width=2)
+          # Platform text
+        self.canvas.create_text(cx, platform_y+platform_height//2, text='GROUND', 
+                              font=("Arial", 11, "bold"), fill='white')
+        
         # If animating, update the trend plot immediately for smoothness
         if self._animating:
             sensor_val = 1.0 if any(not s.occupied and i == int(round(ground_pos)) for i, s in enumerate(self.system.slots)) else 0.0
