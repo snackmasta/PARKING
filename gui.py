@@ -51,10 +51,23 @@ class ParkingHMI:
         tk.Button(frame_ctrl, text="Reset Emergency", width=14, command=self.reset_emergency).grid(row=0, column=3, padx=5)
         tk.Button(frame_ctrl, text="Induce Fault", width=12, command=self.induce_fault).grid(row=1, column=0, padx=5)
         tk.Button(frame_ctrl, text="Reset Fault", width=12, command=self.reset_fault).grid(row=1, column=1, padx=5)
+        tk.Button(frame_ctrl, text="Start System", width=12, command=self.start_system, bg='green', fg='white').grid(row=2, column=0, padx=5)
+        tk.Button(frame_ctrl, text="Stop System", width=12, command=self.stop_system, bg='orange', fg='black').grid(row=2, column=1, padx=5)
         tk.Button(frame_ctrl, text="Quit", width=10, command=self.root.quit).grid(row=1, column=2, padx=5)
+
+    def start_system(self):
+        self.system.stopped = False
+        self.system.status_msg = "System Started. Ready."
+
+    def stop_system(self):
+        self.system.stopped = True
+        self.system.status_msg = "System Stopped."
 
     def park_car(self):
         def do_park():
+            if getattr(self.system, 'stopped', False):
+                self.system.status_msg = "Cannot park: System is stopped!"
+                return
             if self.system.emergency or self.system.fault:
                 self.system.status_msg = "Cannot park: Emergency or Fault!"
                 return
@@ -69,6 +82,9 @@ class ParkingHMI:
         threading.Thread(target=do_park, daemon=True).start()
 
     def retrieve_car(self):
+        if getattr(self.system, 'stopped', False):
+            self.system.status_msg = "Cannot retrieve: System is stopped!"
+            return
         occ_slots = [i for i, s in enumerate(self.system.slots) if s.occupied]
         if not occ_slots:
             self.system.status_msg = "No cars to retrieve."
