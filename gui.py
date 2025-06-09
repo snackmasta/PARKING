@@ -20,6 +20,8 @@ class ParkingHMI:
             'fault': tk.StringVar(),
             'status_msg': tk.StringVar()
         }
+        self._current_anim_ground_slot = float(system.ground_slot)
+        self._animating = False
         self._build_gui()
         self._running = True
         threading.Thread(target=self._run_loop, daemon=True).start()
@@ -215,6 +217,10 @@ class ParkingHMI:
         self.trend_canvas.draw()
 
     def _draw_site(self, anim_ground_slot=None):
+        if anim_ground_slot is not None:
+            self._animating = True
+        else:
+            self._animating = False
         self.canvas.delete('all')
         cx, cy = 110, 160
         r = 100
@@ -222,6 +228,7 @@ class ParkingHMI:
         n = self.system.num_slots
         angle_step = 360 / n
         ground_pos = anim_ground_slot if anim_ground_slot is not None else self.system.ground_slot
+        self._current_anim_ground_slot = float(ground_pos)
         for i in range(n):
             rel_idx = (i - ground_pos) % n
             angle = (90 + angle_step * rel_idx) * math.pi / 180
@@ -234,17 +241,22 @@ class ParkingHMI:
         self.canvas.create_oval(cx-r, cy-r, cx+r, cy+r, outline='blue', width=4)
         self.canvas.create_rectangle(cx-40, cy+100, cx+40, cy+120, fill='tan', outline='brown', width=3)
         self.canvas.create_text(cx, cy+110, text='Ground', font=("Arial", 12, "bold"))
+        # If animating, update the trend plot immediately for smoothness
+        if self._animating:
+            sensor_val = 1.0 if any(not s.occupied and i == int(round(ground_pos)) for i, s in enumerate(self.system.slots)) else 0.0
+            motor_deg = (self._current_anim_ground_slot * 360.0) / self.system.num_slots
+            self._update_trend_plot(sensor_val, motor_deg)
 
     def _run_loop(self):
         while self._running:
             self.update()
-            self._draw_site()
-            # Sensor: car detected at ground (digital)
-            sensor_val = 1.0 if any(not s.occupied and i == self.system.ground_slot for i, s in enumerate(self.system.slots)) else 0.0
-            # Motor: current platform angle in degrees
-            motor_deg = (self.system.ground_slot * 360.0) / self.system.num_slots
-            self._update_trend_plot(sensor_val, motor_deg)
-            time.sleep(0.5)
+            # Only update animation and trend if not animating
+            if not self._animating:
+                self._draw_site()
+                sensor_val = 1.0 if any(not s.occupied and i == self.system.ground_slot for i, s in enumerate(self.system.slots)) else 0.0
+                motor_deg = (self._current_anim_ground_slot * 360.0) / self.system.num_slots
+                self._update_trend_plot(sensor_val, motor_deg)
+            time.sleep(0.05)
 
     def update(self):
         status = self.system.get_status()
