@@ -149,7 +149,10 @@ flowchart TD
 # Detailed Control Logic Flowchart
 
 ```mermaid
+%%{init: { 'layout': 'elk', 'theme': 'base' }}%%
 flowchart TD
+    START([Start])
+    STOP([Stop])
     INIT([System Initialization])
     IDLE([Idle/Waiting])
     EMGSTOP{Emergency Stop?}
@@ -178,6 +181,7 @@ flowchart TD
     DISP_FAULT([Display Fault on HMI])
     WAIT_MAINT([Wait for Maintenance])
 
+    START --> INIT
     INIT --> IDLE
     IDLE --> EMGSTOP
     EMGSTOP -- Yes --> STOP_MOTOR --> DISP_EMG --> WAIT_RESET --> INIT
@@ -194,4 +198,9 @@ flowchart TD
     FIND_SLOT --> SLOT_OCC
     SLOT_OCC -- No --> DISP_ERR --> IDLE
     SLOT_OCC -- Yes --> ROTATE_SLOT --> ALIGN_SLOT --> SIGNAL_UNLOAD --> WAIT_UNLOAD --> MARK_EMPTY --> IDLE
+    %% Add STOP transition for system shutdown (e.g., after WAIT_MAINT or WAIT_RESET if desired)
+    WAIT_MAINT --> STOP
+    WAIT_RESET --> STOP
+    style START fill:#b6fcb6,stroke:#2e8b57,stroke-width:3px
+    style STOP fill:#ffb3b3,stroke:#c0392b,stroke-width:3px
 ```
