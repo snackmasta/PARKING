@@ -43,6 +43,8 @@ class ParkingHMI:
             tk.Label(frame_slots, textvariable=self.vars['slots'][i], font=("Arial", 11)).grid(row=i, column=1, sticky='w')
         tk.Label(frame_slots, text="At Ground:", font=("Arial", 11, "bold")).grid(row=self.system.num_slots, column=0, sticky='e')
         tk.Label(frame_slots, textvariable=self.vars['ground_slot'], font=("Arial", 11, "bold"), fg='green').grid(row=self.system.num_slots, column=1, sticky='w')
+
+        # --- Controls ---
         frame_ctrl = tk.LabelFrame(self.root, text="Controls", padx=10, pady=5, font=("Arial", 11, "bold"))
         frame_ctrl.grid(row=3, column=0, padx=10, pady=10, sticky='ew')
         tk.Button(frame_ctrl, text="Park Car", width=12, command=self.park_car).grid(row=0, column=0, padx=5)
@@ -54,6 +56,36 @@ class ParkingHMI:
         tk.Button(frame_ctrl, text="Start System", width=12, command=self.start_system, bg='green', fg='white').grid(row=2, column=0, padx=5)
         tk.Button(frame_ctrl, text="Stop System", width=12, command=self.stop_system, bg='orange', fg='black').grid(row=2, column=1, padx=5)
         tk.Button(frame_ctrl, text="Quit", width=10, command=self.root.quit).grid(row=1, column=2, padx=5)
+
+        # --- Retrieve Section ---
+        self.frame_retrieve = tk.LabelFrame(self.root, text="Retrieve Car", padx=10, pady=5, font=("Arial", 11, "bold"))
+        self.frame_retrieve.grid(row=4, column=0, padx=10, pady=10, sticky='ew')
+        self.retrieve_var = tk.IntVar()
+        self.retrieve_dropdown = tk.OptionMenu(self.frame_retrieve, self.retrieve_var, "-")
+        self.retrieve_dropdown.grid(row=0, column=0, padx=5)
+        self.retrieve_btn = tk.Button(self.frame_retrieve, text="Confirm Retrieve", command=self.confirm_retrieve)
+        self.retrieve_btn.grid(row=0, column=1, padx=5)
+        self.update_retrieve_section()
+
+    def update_retrieve_section(self):
+        # Save current selection
+        current_selection = self.retrieve_var.get()
+        occ_slots = [i+1 for i, s in enumerate(self.system.slots) if s.occupied]
+        menu = self.retrieve_dropdown['menu']
+        menu.delete(0, 'end')
+        if occ_slots:
+            for slot in occ_slots:
+                menu.add_command(label=str(slot), command=lambda v=slot: self.retrieve_var.set(v))
+            # Only set selection if current is not valid
+            if current_selection in occ_slots:
+                self.retrieve_var.set(current_selection)
+            else:
+                self.retrieve_var.set(occ_slots[0])
+            self.retrieve_btn.config(state='normal')
+        else:
+            menu.add_command(label="-", command=lambda: self.retrieve_var.set(0))
+            self.retrieve_var.set(0)
+            self.retrieve_btn.config(state='disabled')
 
     def start_system(self):
         self.system.stopped = False
@@ -88,22 +120,22 @@ class ParkingHMI:
         occ_slots = [i for i, s in enumerate(self.system.slots) if s.occupied]
         if not occ_slots:
             self.system.status_msg = "No cars to retrieve."
+            self.update_retrieve_section()
             return
-        popup = tk.Toplevel(self.root)
-        popup.title("Select Slot to Retrieve")
-        tk.Label(popup, text="Occupied Slots:", font=("Arial", 11)).pack(pady=5)
-        var = tk.IntVar()
-        for i in occ_slots:
-            tk.Radiobutton(popup, text=f"Slot {i+1}", variable=var, value=i, font=("Arial", 11)).pack(anchor='w')
-        def do_retrieve():
-            slot = var.get()
-            popup.destroy()
-            def retrieve():
-                self.system.rotate_to_slot(slot, self._draw_site)
-                self.system.slots[slot].occupied = False
-                self.system.status_msg = f"Car retrieved from slot {slot+1}."
-            threading.Thread(target=retrieve, daemon=True).start()
-        tk.Button(popup, text="Retrieve", command=do_retrieve).pack(pady=5)
+        self.update_retrieve_section()
+        self.system.status_msg = "Select a slot and press Confirm Retrieve."
+
+    def confirm_retrieve(self):
+        slot = self.retrieve_var.get() - 1
+        if slot < 0 or slot >= self.system.num_slots or not self.system.slots[slot].occupied:
+            self.system.status_msg = "Invalid or empty slot."
+            return
+        def retrieve():
+            self.system.rotate_to_slot(slot, self._draw_site)
+            self.system.slots[slot].occupied = False
+            self.system.status_msg = f"Car retrieved from slot {slot+1}."
+            self.update_retrieve_section()
+        threading.Thread(target=retrieve, daemon=True).start()
 
     def emergency_stop(self):
         self.system.emergency_stop()
@@ -155,3 +187,4 @@ class ParkingHMI:
         self.vars['emergency'].set("YES" if status['emergency'] else "NO")
         self.vars['fault'].set("YES" if status['fault'] else "NO")
         self.vars['status_msg'].set(status['status_msg'])
+        self.update_retrieve_section()
