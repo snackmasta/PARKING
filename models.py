@@ -9,7 +9,7 @@ class ParkingSlot:
         self.occupied = False
 
 class ParkingSystem:
-    def __init__(self, num_slots=5):
+    def __init__(self, num_slots=6):
         self.num_slots = num_slots
         self.slots = [ParkingSlot(i+1) for i in range(num_slots)]
         self.ground_slot = 0  # index of slot at ground
