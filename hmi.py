@@ -40,7 +40,7 @@ class ParkingSystem:
             self.status_msg = "No empty slots. Parking Full!"
             return
         target = empty_slots[0]
-        self.rotate_to_slot(target)
+        self.rotate_to_slot(target, self._draw_site)
         self.slots[target].occupied = True
         self.status_msg = f"Car parked in slot {target+1}."
 
@@ -51,11 +51,11 @@ class ParkingSystem:
         if slot_num < 0 or slot_num >= self.num_slots or not self.slots[slot_num].occupied:
             self.status_msg = "Invalid or empty slot."
             return
-        self.rotate_to_slot(slot_num)
+        self.rotate_to_slot(slot_num, self._draw_site)
         self.slots[slot_num].occupied = False
         self.status_msg = f"Car retrieved from slot {slot_num+1}."
 
-    def rotate_to_slot(self, target_slot):
+    def rotate_to_slot(self, target_slot, draw_callback=None):
         n = self.num_slots
         # Calculate shortest direction
         cw_steps = (target_slot - self.ground_slot) % n
@@ -66,12 +66,21 @@ class ParkingSystem:
         else:
             step = -1
             steps = ccw_steps
+        # For smooth animation, interpolate more frames per slot
+        frames_per_slot = 8
         for _ in range(steps):
-            if self.emergency or self.fault:
-                self.status_msg = "Rotation stopped: Emergency or Fault!"
-                return
+            for f in range(frames_per_slot):
+                if self.emergency or self.fault:
+                    self.status_msg = "Rotation stopped: Emergency or Fault!"
+                    return
+                # Fractional slot position for animation
+                frac = (self.ground_slot + step * (f+1)/frames_per_slot) % n
+                if draw_callback:
+                    draw_callback(frac)
+                time.sleep(0.02)
             self.ground_slot = (self.ground_slot + step) % n
-            time.sleep(0.15)
+        if draw_callback:
+            draw_callback()  # Final position
 
     def emergency_stop(self):
         self.emergency = True
@@ -138,7 +147,55 @@ class ParkingHMI:
         tk.Button(frame_ctrl, text="Reset Fault", width=12, command=self.reset_fault).grid(row=1, column=1, padx=5)
         tk.Button(frame_ctrl, text="Quit", width=10, command=self.root.quit).grid(row=1, column=2, padx=5)
 
-    def _draw_site(self):
+    def park_car(self):
+        def do_park():
+            if self.system.emergency or self.system.fault:
+                self.system.status_msg = "Cannot park: Emergency or Fault!"
+                return
+            empty_slots = [i for i, s in enumerate(self.system.slots) if not s.occupied]
+            if not empty_slots:
+                self.system.status_msg = "No empty slots. Parking Full!"
+                return
+            target = empty_slots[0]
+            self.system.rotate_to_slot(target, self._draw_site)
+            self.system.slots[target].occupied = True
+            self.system.status_msg = f"Car parked in slot {target+1}."
+        threading.Thread(target=do_park, daemon=True).start()
+
+    def retrieve_car(self):
+        occ_slots = [i for i, s in enumerate(self.system.slots) if s.occupied]
+        if not occ_slots:
+            self.system.status_msg = "No cars to retrieve."
+            return
+        popup = tk.Toplevel(self.root)
+        popup.title("Select Slot to Retrieve")
+        tk.Label(popup, text="Occupied Slots:", font=("Arial", 11)).pack(pady=5)
+        var = tk.IntVar()
+        for i in occ_slots:
+            tk.Radiobutton(popup, text=f"Slot {i+1}", variable=var, value=i, font=("Arial", 11)).pack(anchor='w')
+        def do_retrieve():
+            slot = var.get()
+            popup.destroy()
+            def retrieve():
+                self.system.rotate_to_slot(slot, self._draw_site)
+                self.system.slots[slot].occupied = False
+                self.system.status_msg = f"Car retrieved from slot {slot+1}."
+            threading.Thread(target=retrieve, daemon=True).start()
+        tk.Button(popup, text="Retrieve", command=do_retrieve).pack(pady=5)
+
+    def emergency_stop(self):
+        self.system.emergency_stop()
+
+    def reset_emergency(self):
+        self.system.reset_emergency()
+
+    def induce_fault(self):
+        self.system.induce_fault()
+
+    def reset_fault(self):
+        self.system.reset_fault()
+
+    def _draw_site(self, anim_ground_slot=None):
         self.canvas.delete('all')
         cx, cy = 110, 160
         r = 100
@@ -146,13 +203,14 @@ class ParkingHMI:
         n = self.system.num_slots
         angle_step = 360 / n
         # The slot at ground is always drawn at the bottom
+        ground_pos = anim_ground_slot if anim_ground_slot is not None else self.system.ground_slot
         for i in range(n):
-            rel_idx = (i - self.system.ground_slot) % n
+            rel_idx = (i - ground_pos) % n
             angle = (90 + angle_step * rel_idx) * math.pi / 180
             x = cx + r * math.cos(angle)
             y = cy + r * math.sin(angle)
             fill = 'gray' if self.system.slots[i].occupied else 'white'
-            outline = 'green' if i == self.system.ground_slot else 'black'
+            outline = 'green' if int(round(ground_pos)) % n == i else 'black'
             self.canvas.create_rectangle(x-slot_r, y-slot_r, x+slot_r, y+slot_r, fill=fill, outline=outline, width=3)
             self.canvas.create_text(x, y, text=str(i+1), font=("Arial", 16, "bold"))
         # Draw rotary frame
@@ -177,38 +235,6 @@ class ParkingHMI:
         self.vars['emergency'].set("YES" if status['emergency'] else "NO")
         self.vars['fault'].set("YES" if status['fault'] else "NO")
         self.vars['status_msg'].set(status['status_msg'])
-
-    def park_car(self):
-        threading.Thread(target=self.system.park_car, daemon=True).start()
-
-    def retrieve_car(self):
-        occ_slots = [i for i, s in enumerate(self.system.slots) if s.occupied]
-        if not occ_slots:
-            self.system.status_msg = "No cars to retrieve."
-            return
-        popup = tk.Toplevel(self.root)
-        popup.title("Select Slot to Retrieve")
-        tk.Label(popup, text="Occupied Slots:", font=("Arial", 11)).pack(pady=5)
-        var = tk.IntVar()
-        for i in occ_slots:
-            tk.Radiobutton(popup, text=f"Slot {i+1}", variable=var, value=i, font=("Arial", 11)).pack(anchor='w')
-        def do_retrieve():
-            slot = var.get()
-            popup.destroy()
-            threading.Thread(target=self.system.retrieve_car, args=(slot,), daemon=True).start()
-        tk.Button(popup, text="Retrieve", command=do_retrieve).pack(pady=5)
-
-    def emergency_stop(self):
-        self.system.emergency_stop()
-
-    def reset_emergency(self):
-        self.system.reset_emergency()
-
-    def induce_fault(self):
-        self.system.induce_fault()
-
-    def reset_fault(self):
-        self.system.reset_fault()
 
 if __name__ == "__main__":
     root = tk.Tk()
