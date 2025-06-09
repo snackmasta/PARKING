@@ -103,17 +103,7 @@ class ParkingHMI:
             if getattr(self.system, 'stopped', False):
                 self.system.status_msg = "Cannot park: System is stopped!"
                 return
-            if self.system.emergency or self.system.fault:
-                self.system.status_msg = "Cannot park: Emergency or Fault!"
-                return
-            empty_slots = [i for i, s in enumerate(self.system.slots) if not s.occupied]
-            if not empty_slots:
-                self.system.status_msg = "No empty slots. Parking Full!"
-                return
-            target = empty_slots[0]
-            self.system.rotate_to_slot(target, self._draw_site)
-            self.system.slots[target].occupied = True
-            self.system.status_msg = f"Car parked in slot {target+1}."
+            self.system.park_car(draw_callback=self._draw_site)
         threading.Thread(target=do_park, daemon=True).start()
 
     def retrieve_car(self):

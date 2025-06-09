@@ -26,18 +26,35 @@ class ParkingSystem:
             'status_msg': self.status_msg
         }
 
-    def park_car(self):
+    def park_car(self, draw_callback=None):
         if self.emergency or self.fault:
             self.status_msg = "Cannot park: Emergency or Fault!"
+            print("[DEBUG] Parking aborted: Emergency or Fault!", flush=True)
             return
+        n = self.num_slots
         empty_slots = [i for i, s in enumerate(self.slots) if not s.occupied]
         if not empty_slots:
             self.status_msg = "No empty slots. Parking Full!"
+            print("[DEBUG] Parking aborted: No empty slots.", flush=True)
             return
-        target = empty_slots[0]
-        self.rotate_to_slot(target)
-        self.slots[target].occupied = True
-        self.status_msg = f"Car parked in slot {target+1}."
+        print(f"[DEBUG] Current ground slot: {self.ground_slot+1}", flush=True)
+        print(f"[DEBUG] Empty slots: {[i+1 for i in empty_slots]}", flush=True)
+        best_slot = None
+        min_steps = None
+        min_cw = None
+        for slot in empty_slots:
+            cw_steps = (slot - self.ground_slot) % n
+            ccw_steps = (self.ground_slot - slot) % n
+            steps = min(cw_steps, ccw_steps)
+            print(f"[DEBUG] Slot {slot+1}: CW={cw_steps}, CCW={ccw_steps}, min={steps}", flush=True)
+            if (min_steps is None or steps < min_steps or (steps == min_steps and cw_steps < min_cw)):
+                min_steps = steps
+                min_cw = cw_steps
+                best_slot = slot
+        print(f"[DEBUG] Selected slot: {best_slot+1} (steps={min_steps}, CW={min_cw})", flush=True)
+        self.rotate_to_slot(best_slot, draw_callback)
+        self.slots[best_slot].occupied = True
+        self.status_msg = f"Car parked in slot {best_slot+1}."
 
     def retrieve_car(self, slot_num):
         if self.emergency or self.fault:
