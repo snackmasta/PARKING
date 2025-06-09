@@ -88,6 +88,9 @@ class ParkingHMI:
             self.retrieve_btn.config(state='disabled')
 
     def start_system(self):
+        if self.system.emergency:
+            self.system.status_msg = "Cannot start: Emergency Stop is active! Press Reset Emergency."
+            return
         self.system.stopped = False
         self.system.status_msg = "System Started. Ready."
 
