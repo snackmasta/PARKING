@@ -3,6 +3,11 @@ import tkinter as tk
 import threading
 import time
 import math
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import numpy as np
 
 class ParkingHMI:
     def __init__(self, root, system):
@@ -21,7 +26,20 @@ class ParkingHMI:
 
     def _build_gui(self):
         self.root.title("Rotary Parking System HMI Simulation")
-        frame_status = tk.LabelFrame(self.root, text="System Status", padx=10, pady=5, font=("Arial", 11, "bold"))
+        # --- Main container with two columns ---
+        main_frame = tk.Frame(self.root)
+        main_frame.grid(row=0, column=0, sticky='nsew')
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
+        main_frame.grid_rowconfigure(0, weight=1)
+        main_frame.grid_columnconfigure(0, weight=1)
+        main_frame.grid_columnconfigure(1, weight=0)
+
+        # --- Left column: Main UI ---
+        left_frame = tk.Frame(main_frame)
+        left_frame.grid(row=0, column=0, sticky='n')
+
+        frame_status = tk.LabelFrame(left_frame, text="System Status", padx=10, pady=5, font=("Arial", 11, "bold"))
         frame_status.grid(row=0, column=0, padx=10, pady=5, sticky='ew')
         tk.Label(frame_status, textvariable=self.vars['status_msg'], font=("Arial", 12, "bold"), fg='blue').grid(row=0, column=0, columnspan=2, sticky='w')
         tk.Label(frame_status, text="Emergency:", font=("Arial", 11)).grid(row=1, column=0, sticky='e')
@@ -30,13 +48,13 @@ class ParkingHMI:
         tk.Label(frame_status, textvariable=self.vars['fault'], font=("Arial", 11)).grid(row=2, column=1, sticky='w')
 
         # --- Animation Viewfinder ---
-        frame_anim = tk.LabelFrame(self.root, text="Site Animation", padx=10, pady=10, font=("Arial", 11, "bold"))
+        frame_anim = tk.LabelFrame(left_frame, text="Site Animation", padx=10, pady=10, font=("Arial", 11, "bold"))
         frame_anim.grid(row=1, column=0, padx=10, pady=5, sticky='ew')
         self.canvas = tk.Canvas(frame_anim, width=220, height=320, bg='white')
         self.canvas.grid(row=0, column=0)
         self._draw_site()
 
-        frame_slots = tk.LabelFrame(self.root, text="Parking Slots", padx=10, pady=5, font=("Arial", 11, "bold"))
+        frame_slots = tk.LabelFrame(left_frame, text="Parking Slots", padx=10, pady=5, font=("Arial", 11, "bold"))
         frame_slots.grid(row=2, column=0, padx=10, pady=5, sticky='ew')
         for i in range(self.system.num_slots):
             tk.Label(frame_slots, text=f"Slot {i+1}", font=("Arial", 11)).grid(row=i, column=0, sticky='e')
@@ -45,7 +63,7 @@ class ParkingHMI:
         tk.Label(frame_slots, textvariable=self.vars['ground_slot'], font=("Arial", 11, "bold"), fg='green').grid(row=self.system.num_slots, column=1, sticky='w')
 
         # --- Controls ---
-        frame_ctrl = tk.LabelFrame(self.root, text="Controls", padx=10, pady=5, font=("Arial", 11, "bold"))
+        frame_ctrl = tk.LabelFrame(left_frame, text="Controls", padx=10, pady=5, font=("Arial", 11, "bold"))
         frame_ctrl.grid(row=3, column=0, padx=10, pady=10, sticky='ew')
         tk.Button(frame_ctrl, text="Park Car", width=12, command=self.park_car).grid(row=0, column=0, padx=5)
         tk.Button(frame_ctrl, text="Retrieve Car", width=12, command=self.retrieve_car).grid(row=0, column=1, padx=5)
@@ -58,7 +76,7 @@ class ParkingHMI:
         tk.Button(frame_ctrl, text="Quit", width=10, command=self.root.quit).grid(row=1, column=2, padx=5)
 
         # --- Retrieve Section ---
-        self.frame_retrieve = tk.LabelFrame(self.root, text="Retrieve Car", padx=10, pady=5, font=("Arial", 11, "bold"))
+        self.frame_retrieve = tk.LabelFrame(left_frame, text="Retrieve Car", padx=10, pady=5, font=("Arial", 11, "bold"))
         self.frame_retrieve.grid(row=4, column=0, padx=10, pady=10, sticky='ew')
         self.retrieve_var = tk.IntVar()
         self.retrieve_dropdown = tk.OptionMenu(self.frame_retrieve, self.retrieve_var, "-")
@@ -66,6 +84,21 @@ class ParkingHMI:
         self.retrieve_btn = tk.Button(self.frame_retrieve, text="Confirm Retrieve", command=self.confirm_retrieve)
         self.retrieve_btn.grid(row=0, column=1, padx=5)
         self.update_retrieve_section()
+
+        # --- Right column: Trend Graph ---
+        right_frame = tk.Frame(main_frame)
+        right_frame.grid(row=0, column=1, sticky='ns', padx=(0,10), pady=10)
+        frame_trend = tk.LabelFrame(right_frame, text="I/O Trend Graph", padx=10, pady=5, font=("Arial", 11, "bold"))
+        frame_trend.pack(fill='both', expand=True)
+        self.fig, (self.ax_sensor, self.ax_motor) = plt.subplots(2, 1, figsize=(5, 4), dpi=80, sharex=True, gridspec_kw={'height_ratios': [1, 1]})
+        self.trend_canvas = FigureCanvasTkAgg(self.fig, master=frame_trend)
+        self.trend_canvas.get_tk_widget().pack()
+        self.trend_time = []
+        self.trend_sensor = []
+        self.trend_motor_deg = []
+        self.trend_maxlen = 100
+        self.trend_start_time = time.time()
+        self._init_trend_plot()
 
     def update_retrieve_section(self):
         # Save current selection
@@ -146,6 +179,41 @@ class ParkingHMI:
     def reset_fault(self):
         self.system.reset_fault()
 
+    def _init_trend_plot(self):
+        self.ax_sensor.clear()
+        self.ax_motor.clear()
+        self.ax_sensor.set_title('Sensor (Car at Ground)')
+        self.ax_sensor.set_ylabel('Detected')
+        self.ax_sensor.set_ylim(-0.1, 1.1)
+        self.ax_sensor.grid(True)
+        self.sensor_line, = self.ax_sensor.plot([], [], label='Sensor', color='blue', drawstyle='steps-post')
+        self.ax_sensor.legend(loc='upper right')
+        self.ax_motor.set_title('Motor Output (Platform Angle)')
+        self.ax_motor.set_ylabel('Angle (deg)')
+        self.ax_motor.set_ylim(-10, 370)
+        self.ax_motor.set_xlabel('Time (s)')
+        self.ax_motor.grid(True)
+        self.motor_line, = self.ax_motor.plot([], [], label='Angle', color='orange')
+        self.ax_motor.legend(loc='upper right')
+        self.fig.tight_layout()
+        self.trend_canvas.draw()
+
+    def _update_trend_plot(self, sensor_val, motor_deg):
+        t = time.time() - self.trend_start_time
+        self.trend_time.append(t)
+        self.trend_sensor.append(sensor_val)
+        self.trend_motor_deg.append(motor_deg)
+        # Keep only the last N points
+        if len(self.trend_time) > self.trend_maxlen:
+            self.trend_time = self.trend_time[-self.trend_maxlen:]
+            self.trend_sensor = self.trend_sensor[-self.trend_maxlen:]
+            self.trend_motor_deg = self.trend_motor_deg[-self.trend_maxlen:]
+        self.sensor_line.set_data(self.trend_time, self.trend_sensor)
+        self.motor_line.set_data(self.trend_time, self.trend_motor_deg)
+        self.ax_sensor.set_xlim(max(0, self.trend_time[0] if self.trend_time else 0), max(10, self.trend_time[-1] if self.trend_time else 10))
+        self.ax_motor.set_xlim(self.ax_sensor.get_xlim())
+        self.trend_canvas.draw()
+
     def _draw_site(self, anim_ground_slot=None):
         self.canvas.delete('all')
         cx, cy = 110, 160
@@ -171,6 +239,11 @@ class ParkingHMI:
         while self._running:
             self.update()
             self._draw_site()
+            # Sensor: car detected at ground (digital)
+            sensor_val = 1.0 if any(not s.occupied and i == self.system.ground_slot for i, s in enumerate(self.system.slots)) else 0.0
+            # Motor: current platform angle in degrees
+            motor_deg = (self.system.ground_slot * 360.0) / self.system.num_slots
+            self._update_trend_plot(sensor_val, motor_deg)
             time.sleep(0.5)
 
     def update(self):
