@@ -1,0 +1,17 @@
+System Overview: Generate an extremely detailed 3D model of an automated vertical parking system (rotary parking) with 6 slots, following industrial conventions for smart parking facility layout. The model must be suitable for engineering review and documentation.
+
+Process Sections: Clearly represent the following main process sections as distinct but interconnected modules: 1) Entry/exit area with car detection sensors and barrier gates, 2) Rotary parking mechanism with 6 car slots arranged in a vertical loop, 3) Slot sensors and position sensors for each slot, 4) Control panel area with PLC, HMI, and alarm, 5) Digital display area for slot status, 6) Emergency stop and safety devices.
+
+Physical Connections: For every connection between process sections, explicitly show all wiring, signal, and power paths, including connections from sensors (slot, position, car detection, emergency stop) to the PLC, and from PLC to actuators (rotary motor, barrier gates, display, alarm). For each connection, specify the type (signal, power, network), cable routing, and interface (terminal block, connector, etc). Visually distinguish between power, signal, and network cables.
+
+Equipment: Physically model all key equipment in their real-world locations: rotary parking structure with 6 slots, rotary motor, barrier gates at entry and exit, slot sensors, position sensors, car detection sensors, digital display, PLC panel, HMI, and alarm (siren/lamp).
+
+Instrumentation: Show all sensors in their actual installation points and how they connect to the process: slot sensors in each slot, position sensors for rotary mechanism, car detection sensors at entry/exit, emergency stop at operator area. Label all instruments according to the I/O table.
+
+Control and Signal Routing: Include the PLC or control panel, with explicit cable routing or network connections to every sensor and actuator. Show local/remote/manual/auto switches where present. Indicate all control and signal paths between process sections and the control system.
+
+Safety Systems: Clearly show all safety features in their actual locations, including emergency stop, alarm indicators, and interlocks for barrier gates and rotary motor. Indicate how these are connected to both process and control systems.
+
+Layout and Labeling: Visually separate each process section, but make clear how cars, signals, and power move between them. Use realistic proportions for slots, motors, sensors, and equipment. All process, control, and safety elements must be labeled. The model must show every connection and interface between process, control, and safety systems, as well as the logical and physical flow from one plan section to the next.
+
+Standardization: Use ISA/ANSI and industrial 3D modeling standards for all symbols, labeling, and conventions. Ensure the model is ready for use in engineering, review, and plant documentation.
